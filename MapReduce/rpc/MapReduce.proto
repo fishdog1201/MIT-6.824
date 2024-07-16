@@ -1,7 +1,26 @@
 syntax = "proto3";
 
-package MapReduce;
+package mapReduce;
 
-service mapReduce {
-    
+service MapReduce {
+    rpc AssignMapTask() returns(MapTaskReply);
+    rpc AssignReduceTask() returns(ReduceTaskReply);
+    rpc SetMapTaskStat(SetMapTaskStatRequest) returns empty;
+    rpc SetReduceTaskStat(SetReduceTaskStatRequest) returns empty;
+}
+
+message MapTaskReply {
+    string MapFileName;
+}
+
+message ReduceTaskReply {
+    int ReduceTaskIndex;
+}
+
+message SetMapTaskStatRequest {
+    string MapFileName;
+}
+
+message SetReduceTaskStatRequest {
+    int ReduceTaskIndex;
 }
