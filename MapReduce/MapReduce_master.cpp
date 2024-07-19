@@ -4,6 +4,9 @@
 #include <vector>
 #include <mutex>
 #include <unordered_map>
+#include <thread>
+#include <functional>
+#include <chrono>
 #include <grpc++/grpc++.h>
 
 #include "MapReduce.grpc.pb.h"
@@ -23,6 +26,8 @@ using mapReduce::SetReduceTaskStatRequest;
 class MasterImpl final : public MapReduce::Service
 {
 public:
+    MasterImpl() {}
+
     Status AssignMapTask(ServerContext* context, MapTaskReply* reply) override
     {
         if (finishedMapTasks.size() == fileNum) {
@@ -33,12 +38,11 @@ public:
             std::string task = fileList.back();
             fileList.pop_back();
             mtx.unlock();
-            AddTaskToRunningMapTasks(task);
-            return std::string(task);
+            waitMap(task);
+            reply->set_MapFileName(task);
         }
 
-        return "empty";
-
+        reply->set_MapFileName("empty");
     }
     Status AssignReduceTask(ServerContext* context, MapTaskReply* reply) override {}
     Status SetMapTaskStat(ServerContext* context, SetMapTaskStatRequest* request) override {}
@@ -52,13 +56,31 @@ public:
         fileNum = argc - 1;
     }
 
-    void AddTaskToRunningMapTasks(const std::string& task) {}
+    void waitMap(const std::string& task)
+    {
+        std::lock_guard<std::mutex> lck(mtx);
+        runningMapTasks.emplace_back(task);
+        mtx.unlock();
+        std::thread waitMap_thread(std::bind(&MasterImpl::waitMapTask, this, task));
+        waitMap_thread.detach();
+    }
+
+    void waitMapTask(const std::string& task)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(8000));
+        std::lock_guard<std::mutex> lck(mtx);
+        if (finishedMapTasks.count(task) == 0) {
+            std::cout << "Map task timeout, filename is " << task << std::endl;
+            fileList.emplace_back(task);
+        }
+        std::cout << "Map task finished, filename is " << task << std::endl;
+    }
 private:
     int fileNum;
     std::vector<std::string> fileList;
     std::vector<std::string> runningMapTasks;
     std::vector<int> runningReduceTasks;
-    std::unordered_map<std::tring, int> finishedMapTasks;
+    std::unordered_map<std::string, int> finishedMapTasks;
     std::unordered_map<int, int> finishedReduceTasks;
     std::mutex mtx;
 };
