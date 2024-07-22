@@ -7,9 +7,15 @@ service MapReduce {
     rpc AssignReduceTask() returns(ReduceTaskReply);
     rpc SetMapTaskStat(SetMapTaskStatRequest) returns empty;
     rpc SetReduceTaskStat(SetReduceTaskStatRequest) returns empty;
+    rpc GetMapNum() returns(GetMapNumReply);
+    rpc GetReduceNum() returns(GetReduceNum);
 }
 
 message MapTaskReply {
+    string MapFileName;
+}
+
+message SetMapTaskStatRequest {
     string MapFileName;
 }
 
@@ -17,10 +23,14 @@ message ReduceTaskReply {
     int ReduceTaskIndex;
 }
 
-message SetMapTaskStatRequest {
-    string MapFileName;
-}
-
 message SetReduceTaskStatRequest {
     int ReduceTaskIndex;
+}
+
+message GetMapNumReply {
+    int mapNum;
+}
+
+message GetReduceNum {
+    int reduceNum;
 }

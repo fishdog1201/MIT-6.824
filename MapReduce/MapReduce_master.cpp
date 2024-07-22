@@ -17,10 +17,11 @@ using grpc::ServerContext;
 using grpc::Status;
 
 using mapReduce::MapReduce;
-using mapReduce::MapTaskRequest;
 using mapReduce::MapTaskReply;
 using mapReduce::SetMapTaskStatRequest;
 using mapReduce::SetReduceTaskStatRequest;
+using mapReduce::GetMapNumReply;
+using mapReduce::GetReduceNumReply;
 
 
 class MasterImpl final : public MapReduce::Service
@@ -44,8 +45,25 @@ public:
 
         reply->set_MapFileName("empty");
     }
+
+    Status SetMapTaskStat(ServerContext* context, SetMapTaskStatRequest* request) override 
+    {
+        std::lock_guard<std::mutex> lck(mtx);
+        finishedMapTasks[request->MapFileName] = 1;
+        return;
+    }
+
+    Status GetMapNum(ServerContext* context, GetMapNumReduceReply* reply) override
+    {
+        reply->set_mapNum(mapNum);
+    }
+
+    Status GetMapNum(ServerContext* context, GetReduceNumReduceReply* reply) override
+    {
+        reply->set_reduceNum(reduceNum);
+    }
+
     Status AssignReduceTask(ServerContext* context, MapTaskReply* reply) override {}
-    Status SetMapTaskStat(ServerContext* context, SetMapTaskStatRequest* request) override {}
     Status SetReduceTaskStat(ServerContext* context, SetMapTaskStatRequest* request) override {}
 
     void GetAllFiles(int argc, char* argv[])
@@ -77,6 +95,8 @@ public:
     }
 private:
     int fileNum;
+    int mapNum;
+    int reduceNum;
     std::vector<std::string> fileList;
     std::vector<std::string> runningMapTasks;
     std::vector<int> runningReduceTasks;
