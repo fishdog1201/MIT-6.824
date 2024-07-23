@@ -3,34 +3,16 @@ syntax = "proto3";
 package mapReduce;
 
 service MapReduce {
-    rpc AssignMapTask() returns(MapTaskReply);
-    rpc AssignReduceTask() returns(ReduceTaskReply);
-    rpc SetMapTaskStat(SetMapTaskStatRequest) returns empty;
-    rpc SetReduceTaskStat(SetReduceTaskStatRequest) returns empty;
-    rpc GetMapNum() returns(GetMapNumReply);
-    rpc GetReduceNum() returns(GetReduceNum);
+    rpc AssignTask() returns(TaskReply);
+    rpc SetTaskStat(SetTaskStatRequest) returns empty;
 }
 
-message MapTaskReply {
-    string MapFileName;
+message TaskReply {
+    string fileName;
+    int type;
 }
 
-message SetMapTaskStatRequest {
-    string MapFileName;
-}
-
-message ReduceTaskReply {
-    int ReduceTaskIndex;
-}
-
-message SetReduceTaskStatRequest {
-    int ReduceTaskIndex;
-}
-
-message GetMapNumReply {
-    int mapNum;
-}
-
-message GetReduceNum {
-    int reduceNum;
+message SetTaskStatRequest {
+    string fileName;
+    int type;
 }

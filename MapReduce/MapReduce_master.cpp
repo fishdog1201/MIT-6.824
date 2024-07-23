@@ -17,11 +17,8 @@ using grpc::ServerContext;
 using grpc::Status;
 
 using mapReduce::MapReduce;
-using mapReduce::MapTaskReply;
-using mapReduce::SetMapTaskStatRequest;
-using mapReduce::SetReduceTaskStatRequest;
-using mapReduce::GetMapNumReply;
-using mapReduce::GetReduceNumReply;
+using mapReduce::TaskReply;
+using mapReduce::SetTaskStatRequest;
 
 
 class MasterImpl final : public MapReduce::Service
@@ -29,47 +26,43 @@ class MasterImpl final : public MapReduce::Service
 public:
     MasterImpl() {}
 
-    Status AssignMapTask(ServerContext* context, MapTaskReply* reply) override
+    Status AssignTask(ServerContext* context, TaskReply* reply) override
     {
-        if (finishedMapTasks.size() == fileNum) {
-            reply->set_MapFileName("empty");
-        }
-        if (!fileList.empty()) {
+        if (!mapFileList.empty()) {
             std::lock_guard<std::mutex> lck(mtx); 
             std::string task = fileList.back();
             fileList.pop_back();
             mtx.unlock();
             waitMap(task);
-            reply->set_MapFileName(task);
+            reply->set_FileName(task);
+            reply->set_type(MAP);
+            return Status::OK;
         }
-
-        reply->set_MapFileName("empty");
+        if (finishedMapTasks.size() == fileNum && !reduceFileList.empty()) {
+            //TODO: assign reduce task
+            return Status::OK;
+        }
+        reply->set_FileName("");
+        reply->set_type(COMPLETE);
     }
 
-    Status SetMapTaskStat(ServerContext* context, SetMapTaskStatRequest* request) override 
+    Status SetTaskStat(ServerContext* context, SetTaskStatRequest* request) override
     {
         std::lock_guard<std::mutex> lck(mtx);
-        finishedMapTasks[request->MapFileName] = 1;
-        return;
+        if (request->type == MAP) {
+            finishedMapTasks[request->fileName] = 1;
+            runningMapTasks.remove(request->fileName);
+        } else if (request->type == REDUCE) {
+            finishedReduceTasks[request->fileName] = 1;
+            runningReduceTasks.remove(request->fileName);
+        }
+        return Status::OK;
     }
 
-    Status GetMapNum(ServerContext* context, GetMapNumReduceReply* reply) override
-    {
-        reply->set_mapNum(mapNum);
-    }
-
-    Status GetMapNum(ServerContext* context, GetReduceNumReduceReply* reply) override
-    {
-        reply->set_reduceNum(reduceNum);
-    }
-
-    Status AssignReduceTask(ServerContext* context, MapTaskReply* reply) override {}
-    Status SetReduceTaskStat(ServerContext* context, SetMapTaskStatRequest* request) override {}
-
-    void GetAllFiles(int argc, char* argv[])
+    void GetAllMapFiles(int argc, char* argv[])
     {
         for (int i = 1; i < argc; i++) {
-            fileList.emplace_back(argv[i]);
+            mapFileList.emplace_back(argv[i]);
         }
         fileNum = argc - 1;
     }
@@ -90,6 +83,7 @@ public:
         if (finishedMapTasks.count(task) == 0) {
             std::cout << "Map task timeout, filename is " << task << std::endl;
             fileList.emplace_back(task);
+            runningMapTasks.remove(task);
         }
         std::cout << "Map task finished, filename is " << task << std::endl;
     }
@@ -97,15 +91,27 @@ private:
     int fileNum;
     int mapNum;
     int reduceNum;
-    std::vector<std::string> fileList;
+    std::vector<std::string> mapFileList;
+    std::vector<std::string> reduceFileList;
     std::vector<std::string> runningMapTasks;
-    std::vector<int> runningReduceTasks;
+    std::vector<std::string> runningReduceTasks;
     std::unordered_map<std::string, int> finishedMapTasks;
-    std::unordered_map<int, int> finishedReduceTasks;
+    std::unordered_map<std::string, int> finishedReduceTasks;
     std::mutex mtx;
+    enum TASK_TYPE {
+        MAP,
+        REDUCE,
+        COMPLETE,
+    };
 };
 
-void RunServer() {
+int main(int argc, char* argv[])
+{
+    if(argc < 2){
+        std::cout << "missing parameter! The format is ./Master pg*.txt" << std::endl;
+        exit(-1);
+    }
+
     std::string server_address("0.0.0.0:50001");
     MasterImpl service;
 
@@ -117,17 +123,9 @@ void RunServer() {
     std::unique_ptr<Server> server(builder.BuildAndStart());
     std::cout << "Server is listening on " << server_address << std::endl;
 
+    service.GetAllMapFiles(argc, argv);
+
     server->Wait();
-}
-
-int main(int argc, char* argv[])
-{
-    if(argc < 2){
-        std::cout << "missing parameter! The format is ./Master pg*.txt" << std::endl;
-        exit(-1);
-    }
-
-    RunServer();
 
     return 0;
 }
